@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentence Builder for Kids</title>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .word-bank, .sentence-area {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      min-height: 50px;
+      padding: 10px;
+      border: 2px solid #ccc;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+    .word-bank {
+      background: #f5f5f5;
+    }
+    .sentence-area {
+      background: #e0f7fa;
+      min-height: 60px;
+      position: relative;
+    }
+    .word {
+      background: #4CAF50;
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      cursor: move;
+      user-select: none;
+      font-size: 18px;
+    }
+    .word.dragging {
+      opacity: 0.5;
+    }
+    .drop-highlight {
+      border-color: #2196F3;
+      background: #b3e5fc;
+    }
+    .sentence-area:empty::before {
+      content: "Drag green words here to build your sentence!";
+      display: block;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #666;
+      font-style: italic;
+    }
+    button {
+      background: #2196F3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #1976D2;
+    }
+    #feedback {
+      font-size: 18px;
+      margin: 10px 0;
+    }
+    .section-label {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #333;
+      font-size: 18px;
+    }
+    #progress {
+      font-size: 16px;
+      color: #4CAF50;
+      margin: 10px 0;
+    }
+    @keyframes pulse {
+      0% { border-color: #ccc; }
+      50% { border-color: #2196F3; }
+      100% { border-color: #ccc; }
+    }
+    .sentence-area {
+      animation: pulse 2s infinite;
+    }
+    .sentence-area:not(:empty) {
+      animation: none;
+    }
+    canvas#confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Sentence Builder for Kids</h1>
+    <p>Drag the green word blocks from the Word Bank to the blue section to make a sentence!</p>
+    <div id="progress">You've completed 0 sentences!</div>
+    <div class="section-label">Word Bank</div>
+    <div class="word-bank" id="wordBank"></div>
+    <div class="section-label">Build Your Sentence Here</div>
+    <div class="sentence-area" id="sentenceArea"></div>
+    <button onclick="checkSentence()">Check Sentence</button>
+    <button onclick="resetSentence()">Reset Sentence</button>
+    <p id="feedback"></p>
+  </div>
+  <canvas id="confetti-canvas"></canvas>
+
+  <script>
+    const sentences = [
+      {
+        text: "The dog runs",
+        words: ["runs", "dog", "The"],
+        firstWord: "The",
+        hints: {
+          wrongFirstWord: "Start with 'The'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Put the animal word after 'The'."
+        }
+      },
+      {
+        text: "My cat sleeps",
+        words: ["sleeps", "cat", "My"],
+        firstWord: "My",
+        hints: {
+          wrongFirstWord: "Start with 'My'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Put the animal word after 'My'."
+        }
+      },
+      {
+        text: "The bird sings",
+        words: ["sings", "bird", "The"],
+        firstWord: "The",
+        hints: {
+          wrongFirstWord: "Start with 'The'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Put the animal word after 'The'."
+        }
+      },
+      {
+        text: "I like to play",
+        words: ["to", "play", "like", "I"],
+        firstWord: "I",
+        hints: {
+          wrongFirstWord: "Start with 'I'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'I', then 'like', then 'to play'."
+        }
+      },
+      {
+        text: "The sun is bright",
+        words: ["is", "bright", "sun", "The"],
+        firstWord: "The",
+        hints: {
+          wrongFirstWord: "Start with 'The'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'The sun', then 'is', then 'bright'."
+        }
+      },
+      {
+        text: "My fish swims fast",
+        words: ["swims", "fast", "fish", "My"],
+        firstWord: "My",
+        hints: {
+          wrongFirstWord: "Start with 'My'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Put the animal word after 'My', then the action."
+        }
+      },
+      {
+        text: "The big bear eats",
+        words: ["eats", "bear", "big", "The"],
+        firstWord: "The",
+        hints: {
+          wrongFirstWord: "Start with 'The'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'The', then 'big bear', then 'eats'."
+        }
+      },
+      {
+        text: "We read fun books",
+        words: ["read", "books", "fun", "We"],
+        firstWord: "We",
+        hints: {
+          wrongFirstWord: "Start with 'We'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'We', then 'read', then 'fun books'."
+        }
+      },
+      {
+        text: "The cat is sleeping",
+        words: ["is", "cat", "The", "sleeping"],
+        firstWord: "The",
+        hints: {
+          wrongFirstWord: "Start with 'The'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'The cat', then 'is', then 'sleeping'."
+        }
+      },
+      {
+        text: "I draw a happy face",
+        words: ["draw", "I", "a", "happy", "face"],
+        firstWord: "I",
+        hints: {
+          wrongFirstWord: "Start with 'I'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'I', then 'draw', then 'a happy face'."
+        }
+      },
+      {
+        text: "The red ball bounces",
+        words: ["red", "ball", "The", "bounces"],
+        firstWord: "The",
+        hints: {
+          wrongFirstWord: "Start with 'The'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'The red ball', then 'bounces'."
+        }
+      },
+      {
+        text: "My big dog is happy",
+        words: ["big", "dog", "is", "My", "happy"],
+        firstWord: "My",
+        hints: {
+          wrongFirstWord: "Start with 'My'.",
+          incomplete: "Use all the words to make a sentence.",
+          wrongOrder: "Try: 'My big dog', then 'is', then 'happy'."
+        }
+      }
+    ];
+    let currentSentenceIndex = 0;
+    let currentSentence = sentences[currentSentenceIndex];
+    let userSentence = [];
+    let draggedElement = null;
+    let completedSentences = 0;
+
+    // Initialize word bank
+    function initGame() {
+      const wordBank = document.getElementById("wordBank");
+      const sentenceArea = document.getElementById("sentenceArea");
+      wordBank.innerHTML = "";
+      sentenceArea.innerHTML = "";
+      userSentence = [];
+
+      const shuffledWords = currentSentence.words.sort(() => Math.random() - 0.5);
+      shuffledWords.forEach(word => {
+        const wordDiv = document.createElement("div");
+        wordDiv.className = "word";
+        wordDiv.textContent = word;
+        wordDiv.draggable = true;
+        wordDiv.addEventListener("dragstart", dragStart);
+        wordDiv.addEventListener("dragend", dragEnd);
+        wordBank.appendChild(wordDiv);
+      });
+
+      wordBank.addEventListener("dragover", dragOver);
+      wordBank.addEventListener("drop", drop);
+      sentenceArea.addEventListener("dragover", dragOver);
+      sentenceArea.addEventListener("drop", drop);
+      wordBank.addEventListener("dragenter", dragEnter);
+      wordBank.addEventListener("dragleave", dragLeave);
+      sentenceArea.addEventListener("dragenter", dragEnter);
+      sentenceArea.addEventListener("dragleave", dragLeave);
+
+      updateProgress();
+    }
+
+    // Update progress display
+    function updateProgress() {
+      const progress = document.getElementById("progress");
+      progress.textContent = `You've completed ${completedSentences} sentence${completedSentences === 1 ? '' : 's'}!`;
+    }
+
+    // Drag and drop functions
+    function dragStart(e) {
+      draggedElement = e.target;
+      e.target.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", e.target.textContent);
+    }
+
+    function dragEnd(e) {
+      e.target.classList.remove("dragging");
+      draggedElement = null;
+      document.querySelectorAll(".word-bank, .sentence-area").forEach(el => {
+        el.classList.remove("drop-highlight");
+      });
+    }
+
+    function dragOver(e) {
+      e.preventDefault();
+    }
+
+    function dragEnter(e) {
+      if (e.target.classList.contains("word-bank") || e.target.classList.contains("sentence-area")) {
+        e.target.classList.add("drop-highlight");
+      }
+    }
+
+    function dragLeave(e) {
+      if (e.target.classList.contains("word-bank") || e.target.classList.contains("sentence-area")) {
+        e.target.classList.remove("drop-highlight");
+      }
+    }
+
+    function drop(e) {
+      e.preventDefault();
+      if (draggedElement) {
+        const target = e.target.closest(".word-bank, .sentence-area");
+        if (target) {
+          target.appendChild(draggedElement);
+        }
+      }
+    }
+
+    // Trigger confetti animation
+    function triggerConfetti() {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#4CAF50', '#2196F3', '#FF9800', '#E91E63']
+      });
+    }
+
+    // Reset the current sentence
+    function resetSentence() {
+      initGame();
+      const feedback = document.getElementById("feedback");
+      feedback.textContent = "";
+    }
+
+    // Check the sentence
+    function checkSentence() {
+      const sentenceArea = document.getElementById("sentenceArea");
+      const feedback = document.getElementById("feedback");
+      userSentence = Array.from(sentenceArea.children)
+        .filter(child => child.classList.contains("word"))
+        .map(word => word.textContent.trim());
+      const userText = userSentence.join(" ").trim().replace(/\s+/g, " ");
+      
+      console.log("User sentence words:", userSentence);
+      console.log("User sentence:", userText);
+      console.log("Correct sentence:", currentSentence.text);
+      
+      if (userText === currentSentence.text) {
+        feedback.textContent = "Great job! The sentence is correct! 😊🎉";
+        feedback.style.color = "green";
+        triggerConfetti();
+        completedSentences++;
+        currentSentenceIndex = (currentSentenceIndex + 1) % sentences.length;
+        currentSentence = sentences[currentSentenceIndex];
+        setTimeout(initGame, 2000); // Move to next sentence after 2 seconds
+      } else {
+        let hint = currentSentence.hints.wrongOrder;
+        if (userSentence.length === 0) {
+          hint = currentSentence.hints.incomplete;
+        } else if (userSentence.length < currentSentence.words.length) {
+          hint = currentSentence.hints.incomplete;
+        } else if (userSentence[0] !== currentSentence.firstWord) {
+          hint = currentSentence.hints.wrongFirstWord;
+        }
+        feedback.textContent = "Try again. Hint: " + hint + " 😊";
+        feedback.style.color = "red";
+      }
+    }
+
+    // Start the game
+    initGame();
+  </script>
+</body>
+</html>
