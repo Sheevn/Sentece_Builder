@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Sentence Builder for Kids</title>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+      padding: 5vw;
+      margin: 0;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+    .container {
+      max-width: 90vw;
+      margin: 0 auto;
+      background: white;
+      padding: 5vw;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .word-bank, .sentence-area {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2vw;
+      min-height: 15vw;
+      padding: 2vw;
+      border: 2px solid #ccc;
+      border-radius: 5px;
+      margin: 2vw 0;
+      position: relative;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    .word-bank {
+      background: #f5f5f5;
+    }
+    .sentence-area {
+      background: #e0f7fa;
+      min-height: 20vw;
+    }
+    .word {
+      background: #4CAF50;
+      color: white;
+      padding: 3vw;
+      border-radius: 5px;
+      cursor: move;
+      user-select: none;
+      font-size: 4vw;
+      min-width: 15vw;
+      min-height: 10vw;
+      line-height: 10vw;
+      text-align: center;
+      touch-action: none;
+      transition: opacity 0.2s ease;
+    }
+    .word.dragging-source {
+      opacity: 0.4;
+    }
+    .word.dragging-clone {
+      position: absolute;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0.9;
+      transform: scale(1.05);
+    }
+    .drop-highlight {
+      border-color: #2196F3;
+      background: #b3e5fc;
+    }
+    .sentence-area:empty::before {
+      content: "Drag green words here to build your sentence!";
+      display: block;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #666;
+      font-style: italic;
+      font-size: 3.5vw;
+    }
+    .button-container {
+        margin-top: 2vw;
+    }
+    button {
+      background: #2196F3;
+      color: white;
+      border: none;
+      padding: 3vw 5vw;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 2vw 1vw;
+      font-size: 4vw;
+      transition: background-color 0.2s, opacity 0.2s;
+    }
+    button:hover:not(:disabled) {
+      background: #1976D2;
+    }
+    button:disabled {
+        background-color: #aaa;
+        cursor: not-allowed;
+    }
+    #feedback {
+      font-size: 4vw;
+      margin: 2vw 0;
+      min-height: 1.2em;
+    }
+    .section-label {
+      font-weight: bold;
+      margin-bottom: 2vw;
+      color: #333;
+      font-size: 4.5vw;
+    }
+    #progress {
+      font-size: 4vw;
+      color: #4CAF50;
+      margin: 2vw 0;
+    }
+    @keyframes pulse {
+      0% { border-color: #ccc; }
+      50% { border-color: #2196F3; }
+      100% { border-color: #ccc; }
+    }
+    .sentence-area {
+      animation: pulse 2s infinite;
+    }
+    .sentence-area:not(:empty) {
+      animation: none;
+    }
+    canvas#confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1001;
+    }
+    @media (max-width: 600px) {
+      body { padding: 3vw; }
+      .container { padding: 3vw; }
+      .word {
+        font-size: 5vw;
+        min-width: 20vw;
+        min-height: 12vw;
+        line-height: 12vw;
+        padding: 2vw;
+      }
+      .word-bank, .sentence-area {
+        gap: 1.5vw;
+        padding: 1.5vw;
+        min-height: 20vw;
+      }
+      .sentence-area:empty::before { font-size: 4vw; }
+      button { font-size: 5vw; padding: 3vw 6vw; }
+      #feedback, #progress, .section-label { font-size: 5vw; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Sentence Builder for Kids</h1>
+    <p id="instructions">Drag the green word blocks to the blue section to make a sentence!</p>
+    <div id="progress">You've completed 0 sentences!</div>
+    <div id="gameArea">
+        <div class="section-label">Word Bank</div>
+        <div class="word-bank" id="wordBank"></div>
+        <div class="section-label">Build Your Sentence Here</div>
+        <div class="sentence-area" id="sentenceArea"></div>
+    </div>
+    <div class="button-container" id="buttonContainer">
+        <button id="checkButton" onclick="checkSentence()">Check Sentence</button>
+        <button id="resetButton" onclick="resetSentence()">Reset Sentence</button>
+    </div>
+    <p id="feedback"></p>
+  </div>
+  <canvas id="confetti-canvas"></canvas>
+
+  <script>
+    const sentences = [
+      { text: "The dog runs", words: ["runs", "dog", "The"], firstWord: "The", hints: { wrongFirstWord: "Start with 'The'.", incomplete: "Use all the words.", wrongOrder: "Put the animal word after 'The'." } },
+      { text: "My cat sleeps", words: ["sleeps", "cat", "My"], firstWord: "My", hints: { wrongFirstWord: "Start with 'My'.", incomplete: "Use all the words.", wrongOrder: "Put the animal word after 'My'." } },
+      { text: "The bird sings", words: ["sings", "bird", "The"], firstWord: "The", hints: { wrongFirstWord: "Start with 'The'.", incomplete: "Use all the words.", wrongOrder: "Put the animal word after 'The'." } },
+      { text: "I like to play", words: ["to", "play", "like", "I"], firstWord: "I", hints: { wrongFirstWord: "Start with 'I'.", incomplete: "Use all the words.", wrongOrder: "Try: 'I', then 'like', then 'to play'." } },
+      { text: "The sun is bright", words: ["is", "bright", "sun", "The"], firstWord: "The", hints: { wrongFirstWord: "Start with 'The'.", incomplete: "Use all the words.", wrongOrder: "Try: 'The sun', then 'is', then 'bright'." } },
+      { text: "My fish swims fast", words: ["swims", "fast", "fish", "My"], firstWord: "My", hints: { wrongFirstWord: "Start with 'My'.", incomplete: "Use all the words.", wrongOrder: "Put the animal word after 'My', then the action." } },
+      { text: "The big bear eats", words: ["eats", "bear", "big", "The"], firstWord: "The", hints: { wrongFirstWord: "Start with 'The'.", incomplete: "Use all the words.", wrongOrder: "Try: 'The', then 'big bear', then 'eats'." } },
+      { text: "We read fun books", words: ["read", "books", "fun", "We"], firstWord: "We", hints: { wrongFirstWord: "Start with 'We'.", incomplete: "Use all the words.", wrongOrder: "Try: 'We', then 'read', then 'fun books'." } },
+      { text: "The cat is sleeping", words: ["is", "cat", "The", "sleeping"], firstWord: "The", hints: { wrongFirstWord: "Start with 'The'.", incomplete: "Use all the words.", wrongOrder: "Try: 'The cat', then 'is', then 'sleeping'." } },
+      { text: "The red ball bounces", words: ["red", "ball", "The", "bounces"], firstWord: "The", hints: { wrongFirstWord: "Start with 'The'.", incomplete: "Use all the words.", wrongOrder: "Try: 'The red ball', then 'bounces'." } },
+      { text: "I draw a happy face", words: ["draw", "I", "a", "happy", "face"], firstWord: "I", hints: { wrongFirstWord: "Start with 'I'.", incomplete: "Use all the words.", wrongOrder: "Try: 'I', then 'draw', then 'a happy face'." } },
+      { text: "My big dog is happy", words: ["big", "dog", "is", "My", "happy"], firstWord: "My", hints: { wrongFirstWord: "Start with 'My'.", incomplete: "Use all the words.", wrongOrder: "Try: 'My big dog', then 'is', then 'happy'." } }
+    ];
+
+    // NEW: Sort sentences by length for progressive difficulty
+    sentences.sort((a, b) => a.words.length - b.words.length);
+
+    let currentSentenceIndex = 0;
+    let completedSentences = 0;
+
+    let draggedElement = null;
+    let draggedClone = null;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    function initGame() {
+      const wordBank = document.getElementById("wordBank");
+      const sentenceArea = document.getElementById("sentenceArea");
+      const feedback = document.getElementById("feedback");
+      const checkButton = document.getElementById("checkButton");
+      const resetButton = document.getElementById("resetButton");
+
+      wordBank.innerHTML = "";
+      sentenceArea.innerHTML = "";
+      feedback.textContent = "";
+      checkButton.disabled = false;
+      resetButton.disabled = false;
+      
+      let currentSentence = sentences[currentSentenceIndex];
+      const shuffledWords = [...currentSentence.words].sort(() => Math.random() - 0.5);
+      
+      shuffledWords.forEach(word => {
+        const wordDiv = document.createElement("div");
+        wordDiv.className = "word";
+        wordDiv.textContent = word;
+        wordBank.appendChild(wordDiv);
+      });
+
+      updateProgress();
+    }
+
+    function handleDragStart(e) {
+      const target = e.target.closest('.word');
+      if (!target) return;
+      if (e.type === 'touchstart') e.preventDefault();
+
+      draggedElement = target;
+      const rect = draggedElement.getBoundingClientRect();
+      const touch = e.type === 'touchstart' ? e.touches[0] : e;
+      offsetX = touch.clientX - rect.left;
+      offsetY = touch.clientY - rect.top;
+
+      draggedClone = draggedElement.cloneNode(true);
+      draggedClone.classList.add('dragging-clone');
+      document.body.appendChild(draggedClone);
+      draggedClone.style.left = `${rect.left}px`;
+      draggedClone.style.top = `${rect.top}px`;
+      draggedClone.style.width = `${rect.width}px`;
+      draggedElement.classList.add('dragging-source');
+    }
+
+    function handleDragMove(e) {
+      if (!draggedClone) return;
+      if (e.type === 'touchmove') e.preventDefault();
+      const touch = e.type === 'touchmove' ? e.touches[0] : e;
+      draggedClone.style.left = `${touch.clientX - offsetX}px`;
+      draggedClone.style.top = `${touch.clientY - offsetY}px`;
+      updateDropHighlight(touch.clientX, touch.clientY);
+    }
+
+    function handleDragEnd(e) {
+      if (!draggedElement) return;
+      const touch = e.type === 'touchend' ? e.changedTouches[0] : e;
+      const dropTarget = getDropTarget(touch.clientX, touch.clientY);
+      if (dropTarget) {
+        const insertBeforeElement = getInsertBeforeElement(dropTarget, touch.clientX);
+        dropTarget.insertBefore(draggedElement, insertBeforeElement);
+      }
+      draggedElement.classList.remove('dragging-source');
+      if (draggedClone) document.body.removeChild(draggedClone);
+      clearDropHighlight();
+      draggedElement = null;
+      draggedClone = null;
+    }
+
+    function updateDropHighlight(x, y) {
+      const dropTarget = getDropTarget(x, y);
+      clearDropHighlight();
+      if (dropTarget) dropTarget.classList.add('drop-highlight');
+    }
+    
+    function getDropTarget(x, y) {
+        if (draggedClone) draggedClone.style.display = 'none';
+        const elementBelow = document.elementFromPoint(x, y);
+        if (draggedClone) draggedClone.style.display = '';
+        return elementBelow ? elementBelow.closest('.word-bank, .sentence-area') : null;
+    }
+
+    function getInsertBeforeElement(container, x) {
+        const otherWords = [...container.querySelectorAll('.word:not(.dragging-source)')];
+        return otherWords.find(other => x < other.getBoundingClientRect().left + other.getBoundingClientRect().width / 2) || null;
+    }
+
+    function clearDropHighlight() {
+      document.querySelectorAll('.drop-highlight').forEach(el => el.classList.remove('drop-highlight'));
+    }
+
+    function updateProgress() {
+      const progress = document.getElementById("progress");
+      progress.textContent = `Sentence ${completedSentences + 1} of ${sentences.length}`;
+    }
+
+    function triggerConfetti() {
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    }
+
+    function resetSentence() {
+      initGame();
+    }
+
+    function checkSentence() {
+      const sentenceArea = document.getElementById("sentenceArea");
+      const feedback = document.getElementById("feedback");
+      const checkButton = document.getElementById("checkButton");
+      const resetButton = document.getElementById("resetButton");
+      const currentSentence = sentences[currentSentenceIndex];
+
+      const userSentence = Array.from(sentenceArea.children).map(word => word.textContent.trim());
+      const userText = userSentence.join(" ").trim();
+      
+      if (userText === currentSentence.text) {
+        feedback.textContent = "Great job! That's correct! 😊🎉";
+        feedback.style.color = "green";
+        triggerConfetti();
+        completedSentences++;
+        
+        // Disable buttons during transition
+        checkButton.disabled = true;
+        resetButton.disabled = true;
+
+        if (completedSentences === sentences.length) {
+            // Game is complete!
+            setTimeout(showCompletionScreen, 2000);
+        } else {
+            // Advance to the next sentence
+            currentSentenceIndex++;
+            setTimeout(initGame, 2000);
+        }
+      } else {
+        let hint = currentSentence.hints.wrongOrder;
+        if (userSentence.length === 0) hint = "Drag words to the blue box to start.";
+        else if (userSentence.length < currentSentence.words.length) hint = currentSentence.hints.incomplete;
+        else if (userSentence[0] !== currentSentence.firstWord) hint = currentSentence.hints.wrongFirstWord;
+        feedback.textContent = "Not quite. Hint: " + hint + " 🤔";
+        feedback.style.color = "red";
+      }
+    }
+
+    function showCompletionScreen() {
+        document.getElementById('gameArea').style.display = 'none';
+        document.getElementById('instructions').style.display = 'none';
+        document.getElementById('progress').textContent = `You completed all ${sentences.length} sentences!`;
+        
+        const feedback = document.getElementById('feedback');
+        feedback.textContent = 'Amazing work! You are a sentence superstar! 🌟';
+        feedback.style.color = 'darkblue';
+
+        const buttonContainer = document.getElementById('buttonContainer');
+        buttonContainer.innerHTML = ''; // Clear old buttons
+
+        const playAgainButton = document.createElement('button');
+        playAgainButton.textContent = 'Play Again?';
+        playAgainButton.onclick = restartGame;
+        buttonContainer.appendChild(playAgainButton);
+
+        // Bigger confetti for the finale
+        confetti({ particleCount: 250, spread: 120, origin: { y: 0.6 } });
+    }
+
+    function restartGame() {
+        currentSentenceIndex = 0;
+        completedSentences = 0;
+
+        document.getElementById('gameArea').style.display = 'block';
+        document.getElementById('instructions').style.display = 'block';
+        
+        const buttonContainer = document.getElementById('buttonContainer');
+        buttonContainer.innerHTML = `
+            <button id="checkButton" onclick="checkSentence()">Check Sentence</button>
+            <button id="resetButton" onclick="resetSentence()">Reset Sentence</button>
+        `;
+        
+        initGame();
+    }
+
+    // Add universal drag listeners to the body
+    document.body.addEventListener("mousedown", handleDragStart);
+    document.body.addEventListener("touchstart", handleDragStart, { passive: false });
+    document.body.addEventListener("mousemove", handleDragMove);
+    document.body.addEventListener("touchmove", handleDragMove, { passive: false });
+    document.body.addEventListener("mouseup", handleDragEnd);
+    document.body.addEventListener("touchend", handleDragEnd);
+
+    // Start the game
+    initGame();
+  </script>
+</body>
+</html>
